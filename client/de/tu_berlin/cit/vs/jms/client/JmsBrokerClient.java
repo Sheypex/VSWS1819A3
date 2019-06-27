@@ -45,10 +45,12 @@ public class JmsBrokerClient {
 
     private void awaitConf(BrokerMessage.Type type) {
         synchronized (lock2) {
-            awaitingConf = true;
-            confType = type;
-            synchronized (lock1) {
-                lock1.notify();
+            if (!awaitingConf()) {
+                awaitingConf = true;
+                confType = type;
+                synchronized (lock1) {
+                    lock1.notify();
+                }
             }
         }
     }
@@ -76,56 +78,59 @@ public class JmsBrokerClient {
             if (msg instanceof ObjectMessage) {
                 try {
                     BrokerMessage brokMsg = (BrokerMessage) (((ObjectMessage) msg).getObject());
+                    String status = "";
                     switch (brokMsg.getType()) {
                         case STOCK_LIST:
                             ListMessage listMsg = (ListMessage) brokMsg;
                             onListMsg(listMsg);
                             break;
                         case SYSTEM_SUCCESS:
+                            status = "Successfully ";
                             SuccessMessage succMsg = (SuccessMessage) brokMsg;
-                            System.out.print("Successfully ");
                             switch (succMsg.getConfRegarding()) {
                                 case STOCK_BUY:
-                                    System.out.println("bought");
+                                    status += "bought";
                                     break;
                                 case SYSTEM_REGISTER:
-                                    System.out.println("registered");
+                                    status += "registered";
                                     break;
                                 case STOCK_LIST:
-                                    System.out.println("received stock list");
+                                    status += "received stock list";
                                     break;
                                 case STOCK_SELL:
-                                    System.out.println("sold");
+                                    status += "sold";
                                     break;
                                 case SYSTEM_UNREGISTER:
-                                    System.out.println("unregistered");
+                                    status += "unregistered";
                                     break;
                                 default:
                                     Logger.getLogger(JmsBrokerClient.class.getName()).log(Level.SEVERE, "unsupported confRegarding Type");
                                     break;
                             }
+                            Logger.getLogger(JmsBrokerClient.class.getName()).log(Level.INFO, status);
                             resolveConf(succMsg.getConfRegarding());
                             break;
                         case SYSTEM_ERROR:
                             ErrorMessage errMsg = (ErrorMessage) brokMsg;
-                            System.out.print("Server encountered an error ");
+                            status = "Server encountered an error ";
                             switch (errMsg.getErrorRegarding()) {
                                 case SYSTEM_REGISTER:
-                                    System.out.println("registering");
+                                    status += "registering";
                                     throw new RuntimeException("Couldn't register");
                                 case STOCK_BUY:
-                                    System.out.println("buying");
+                                    status += "buying";
                                     break;
                                 case STOCK_LIST:
-                                    System.out.println("providing the stock list");
+                                    status += "providing the stock list";
                                     throw new RuntimeException("No stock list available");
                                 case STOCK_SELL:
-                                    System.out.println("selling");
+                                    status += "selling";
                                     break;
                                 case SYSTEM_UNREGISTER:
-                                    System.out.println("unregistering");
+                                    status += "unregistering";
                                     break;
                             }
+                            Logger.getLogger(JmsBrokerClient.class.getName()).log(Level.INFO, status);
                             resolveConf(errMsg.getErrorRegarding());
                             break;
                         default:
@@ -173,23 +178,21 @@ public class JmsBrokerClient {
         } catch (JMSException e) {
             e.printStackTrace();
         }
-        try {
-            requestList();
-        } catch (JMSException e) {
-            e.printStackTrace();
-        }
-        System.out.println("Registered on server and received stock list:");
-        for (Stock s : stockList) {
-            System.out.println(s.toString());
+        send(new RequestListMessage());
+        if (!awaitingConf()) {
+            System.out.println("Registered on server and received stock list:");
+            for (Stock s : stockList) {
+                System.out.println(s.toString());
+            }
         }
     }
 
     public void send(BrokerMessage brokerMessage) {
         try {
-            awaitingConf();
-
-            awaitConf(brokerMessage.getType());
-            inputQProd.send(session.createObjectMessage(brokerMessage));
+            if (!awaitingConf()) {
+                awaitConf(brokerMessage.getType());
+                inputQProd.send(session.createObjectMessage(brokerMessage));
+            }
         } catch (JMSException e) {
             e.printStackTrace();
         }
@@ -197,6 +200,11 @@ public class JmsBrokerClient {
 
     public void requestList() throws JMSException {
         send(new RequestListMessage());
+        if (!awaitingConf()) {
+            for (Stock s : stockList) {
+                System.out.println(s.toString());
+            }
+        }
     }
 
     public void buy(String stockName, int amount) throws JMSException {
@@ -216,11 +224,10 @@ public class JmsBrokerClient {
     }
 
     public void quit() throws JMSException {
-        awaitConf(BrokerMessage.Type.SYSTEM_UNREGISTER);
         send(new UnregisterMessage(clientName));
-        while (!awaitingConf()) {
+        if (!awaitingConf()) {
+            session.close();
         }
-        session.close();
     }
 
     /**

@@ -14,8 +14,10 @@ public class Registrator extends Thread {
         ClientHandle nC = new ClientHandle(name, server);
         synchronized (server.clientList) {
             server.clientList.add(nC);
+            nC.start();
         }
         nC.send(new SuccessMessage(BrokerMessage.Type.SYSTEM_REGISTER));
+        Logger.getLogger(JmsBrokerServer.class.getName()).log(Level.INFO, "Successfully registered " + name);
         return;
     }
 

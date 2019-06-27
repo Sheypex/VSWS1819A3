@@ -46,7 +46,7 @@ public class SimpleBroker {
     public void stop() throws JMSException {
         //TODO
         reg.die();
-        for (StockTopic sT : stockTopicList){
+        for (StockTopic sT : stockTopicList) {
             sT.die();
         }
         for (ClientHandle c : clientList) {
@@ -93,6 +93,9 @@ public class SimpleBroker {
         }
         Stock stock = stockTopic.getStock();
         if (stock == null) {
+            return -1;
+        }
+        if (stock.getAvailableCount() + amount > stock.getStockCount()) {
             return -1;
         }
         synchronized (stock) {
