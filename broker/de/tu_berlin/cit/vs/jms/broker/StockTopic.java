@@ -85,6 +85,7 @@ public class StockTopic extends Thread{
                     }
                 }
                 send();
+                sendUpdate = false;
             }
         }
     }

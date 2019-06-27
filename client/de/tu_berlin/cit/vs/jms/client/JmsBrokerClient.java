@@ -13,8 +13,6 @@ import javax.jms.*;
 
 import de.tu_berlin.cit.vs.jms.common.*;
 import org.apache.activemq.ActiveMQConnectionFactory;
-import org.apache.activemq.broker.Broker;
-
 
 public class JmsBrokerClient {
     private String clientName;
@@ -25,6 +23,7 @@ public class JmsBrokerClient {
     Queue inputQ;
     MessageProducer inputQProd;
     List<Stock> stockList;
+    List<TopicWatch> topicWatchList;
     Boolean awaitingConf;
     BrokerMessage.Type confType;
     private final Object lock1 = new Object();
@@ -160,6 +159,7 @@ public class JmsBrokerClient {
 
     public void start() {
         stockList = new ArrayList<>();
+        topicWatchList = new ArrayList<>();
         try {
             Queue regQ = session.createQueue("registration");
             MessageProducer regQProd = session.createProducer(regQ);
@@ -216,17 +216,24 @@ public class JmsBrokerClient {
     }
 
     public void watch(String stockName) throws JMSException {
-        //TODO
+        topicWatchList.add(new TopicWatch(stockName, session));
     }
 
     public void unwatch(String stockName) throws JMSException {
-        //TODO
+        for (TopicWatch tW : topicWatchList) {
+            if (tW.topic.getTopicName().equals(stockName)) {
+                tW.die();
+                topicWatchList.remove(tW);
+                break;
+            }
+        }
     }
 
     public void quit() throws JMSException {
         send(new UnregisterMessage(clientName));
         if (!awaitingConf()) {
             session.close();
+            con.stop();
         }
     }
 
