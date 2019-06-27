@@ -18,6 +18,7 @@ public abstract class BrokerMessage implements Serializable {
         SYSTEM_REGISTER,
         SYSTEM_UNREGISTER,
         SYSTEM_ERROR,
+        SYSTEM_SUCCESS,
 
         STOCK_LIST,
         STOCK_BUY,
